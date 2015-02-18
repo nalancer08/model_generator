@@ -3,12 +3,8 @@
 	 * site.inc.php
 	 * This class is the core of Hummingbird, so please try to keep it backwards-compatible if you modify it.
 	 *
-	 * Version: 	2.0
+	 * Version: 	2.0.1
 	 * Author(s):	biohzrdmx <github.com/biohzrdmx>
-	 * ToDo:		Improve hook engine
-	 * 				Improve tokens (make them more nonce-like)
-	 * 				Improve routing (per-route priority would be great)
-	 * 				Include more scripts (jquery-ui, jquery.validator2, jquery.loader2, etc)
 	 */
 
 	class Site {
@@ -16,11 +12,13 @@
 		protected $base_dir;
 		protected $routes;
 		protected $default_route;
+		protected $script_vars;
 		protected $dirs;
 		protected $actions;
 		protected $scripts;
 		protected $styles;
 		protected $slugs;
+		protected $request;
 		protected $params;
 		protected $page;
 		protected $pages;
@@ -69,19 +67,17 @@
 			$this->site_title = $settings['shared']['site_name'];
 			$this->page_title = $this->site_title;
 			# Register base styles
-			$this->registerStyle('bootstrap', $this->baseUrl('/css/bootstrap.min.css') );
-			$this->registerStyle('bootstrap3', $this->baseUrl('/css/bootstrap3.min.css') );
-			$this->registerStyle('bootstrap-responsive', $this->baseUrl('/css/bootstrap-responsive.min.css'), array('bootstrap') );
-			$this->registerStyle('magnific-popup', $this->baseUrl('/css/magnific-popup.css') );
+			$this->registerStyle('twitter-bootstrap', '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.2.0/css/bootstrap.min.css');
+			$this->registerStyle('magnific-popup', '//cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/0.9.9/magnific-popup.css');
 			# Register base scripts
-			$this->registerScript('modernizr', $this->baseUrl('/js/modernizr-2.6.2.min.js') );
-			$this->registerScript('jquery', $this->baseUrl('/js/jquery-1.9.1.min.js') );
-			$this->registerScript('jquery.form', $this->baseUrl('/js/jquery.form.js'), array('jquery') );
-			$this->registerScript('jquery.cycle', $this->baseUrl('/js/jquery.cycle.all.js'), array('jquery') );
-			$this->registerScript('jquery.magnific-popup', $this->baseUrl('/js/jquery.magnific-popup.min.js'), array('jquery') );
-			$this->registerScript('underscore', $this->baseUrl('/js/underscore.js') );
-			$this->registerScript('backbone', $this->baseUrl('/js/backbone.js'), array('underscore') );
-			$this->registerScript('bootstrap3', $this->baseUrl('/js/bootstrap3.min.js'), array('jquery') );
+			$this->registerScript('modernizr', '//cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.2/modernizr.min.js');
+			$this->registerScript('jquery', '//cdnjs.cloudflare.com/ajax/libs/jquery/1.11.0/jquery.min.js');
+			$this->registerScript('jquery.form', '//cdnjs.cloudflare.com/ajax/libs/jquery.form/3.50/jquery.form.min.js', array('jquery'));
+			$this->registerScript('jquery.cycle', '//cdnjs.cloudflare.com/ajax/libs/jquery.cycle/3.03/jquery.cycle.all.min.js', array('jquery'));
+			$this->registerScript('magnific-popup', '//cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/0.9.9/jquery.magnific-popup.min.js', array('jquery'));
+			$this->registerScript('twitter-bootstrap', '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.2.0/js/bootstrap.min.js', array('jquery'));
+			$this->registerScript('underscore', '//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js');
+			$this->registerScript('backbone', '//cdnjs.cloudflare.com/ajax/libs/backbone.js/1.1.2/backbone-min.js', array('underscore'));
 			# Default dirs
 			$this->dirs = array(
 				'plugins' => '/plugins',
@@ -132,6 +128,13 @@
 			}
 			$slug = ltrim( rtrim($slug, '/'), '/' );
 			$template = isset($site->pages[$slug]) && $whitelist ? $site->pages[$slug] : $slug;
+
+			#Check if redirect
+			if(preg_match( '#((https?|ftp)://(\S*?\.\S*?))([\s)\[\]{},;"\':<]|\.\s|$)#i', $template ) === 1 ){
+				$site->redirectTo($template, null, '302');
+				exit();
+			}
+
 			$page = sprintf('%s/%s.php', $templates_dir, $template);
 			if ( (!isset($site->pages[$slug]) && $whitelist ) || !file_exists($page) ) {
 				# The page does not exist
@@ -293,6 +296,9 @@
 			$request = preg_replace("/".str_replace('/', '\/', $domain)."/", '', $request, 1);
 			$request = ltrim($request, '/');
 
+			# Save current request string
+			$this->request = $request;
+
 			# Get the parameters
 			$segments = explode('?', $request);
 			if (count($segments) > 1) {
@@ -430,6 +436,15 @@
 			return $this->page;
 		}
 
+
+		/**
+		 * Get the current request string
+		 * @return string The current request string
+		 */
+		function getCurRequest() {
+			return $this->request;
+		}
+
 		/**
 		 * Check whether the given slug is on the current list of slugs
 		 * @param  string  $slug The slug
@@ -492,14 +507,14 @@
 		 * @param  string $route    Route to redirect to
 		 * @param  string $protocol Protocol to override default http (https, ftp, etc)
 		 */
-		function redirectTo($route, $protocol = null) {
+		function redirectTo($route, $protocol = null, $http_response_code = '') {
 			if ( preg_match('/^(http:\/\/|https:\/\/).*/', $route) !== 1 ) {
 				$url = $this->baseUrl($route, false, $protocol);
 			} else {
 				$url = $route;
 			}
 			$header = sprintf('Location: %s', $url);
-			header($header);
+			header($header, true, $http_response_code);
 			exit;
 		}
 
@@ -557,8 +572,46 @@
 		}
 
 		/**
-		 * Output a well-formed stylesheet link tag to the specified stylesheet
-		 * @param  string $name Name of the stylesheet
+		 * Add an script variable
+		 * @param string $var   Variable name
+		 * @param mixed  $value Variable value
+		 */
+		function addScriptVar($var, $value) {
+			$this->script_vars[$var] = $value;
+		}
+
+		/**
+		 * Remove an script variable
+		 * @param  string $var Variable name
+		 * @return nothing
+		 */
+		function removeScriptVar($var) {
+			unset( $this->script_vars[$var] );
+		}
+
+		/**
+		 * Print the registered script variables
+		 * @return nothing
+		 */
+		function includeScriptVars() {
+			$vars = '';
+			if ($this->script_vars) {
+				foreach ($this->script_vars as $var => $value) {
+					if ( is_array($value) || is_object($value) ) {
+						$value = json_encode($value);
+					} elseif (! is_numeric($value) ) {
+						$value = "'{$value}'";
+					}
+					$vars .= "var {$var} = {$value};\n";
+				}
+				$output = sprintf("<script type=\"text/javascript\">\n%s</script>", $vars);
+				echo($output."\n");
+			}
+		}
+
+		/**
+		 * Add a previously registered stylesheet to the inclusion queue
+		 * @param  string $name Name of the registered stylesheet
 		 */
 		function enqueueStyle($name) {
 			if ( isset( $this->styles[$name] ) ) {
@@ -573,8 +626,8 @@
 		}
 
 		/**
-		 * Output a well-formed script tag to the specified script
-		 * @param  string $name 	Name of the script
+		 * Add a previously registered script to the inclusion queue
+		 * @param  string $name 	Name of the registered script
 		 */
 		function enqueueScript($name) {
 			if ( isset( $this->scripts[$name] ) ) {
@@ -584,6 +637,44 @@
 						$this->enqueueScript($dep);
 					}
 					$this->enqueued_scripts[$name] = $name;
+				}
+			}
+		}
+
+		/**
+		 * Remove a previously enqueued stylesheet from the inclusion queue
+		 * @param string $name  Name of the enqueued stylesheet
+		 * @param boolean $dependencies Dequeue dependencies too (not recommended)
+		 */
+		function dequeueStyle($name, $dependencies = false) {
+			if ( isset( $this->styles[$name] ) ) {
+				if ( isset($this->enqueued_styles[$name]) ) {
+					$item = $this->styles[$name];
+					if ($dependencies) {
+						foreach ($item['requires'] as $dep) {
+							$this->dequeueStyle($dep);
+						}
+					}
+					unset( $this->enqueued_styles[$name] );
+				}
+			}
+		}
+
+		/**
+		 * Remove a previously enqueued script from the inclusion queue
+		 * @param string $name  Name of the enqueued script
+		 * @param boolean $dependencies Dequeue dependencies too (not recommended)
+		 */
+		function dequeueScript($name, $dependencies = false) {
+			if ( isset( $this->scripts[$name] ) ) {
+				if ( isset($this->enqueued_scripts[$name]) ) {
+					$item = $this->scripts[$name];
+					if ($dependencies) {
+						foreach ($item['requires'] as $dep) {
+							$this->dequeueScript($dep);
+						}
+					}
+					unset( $this->enqueued_scripts[$name] );
 				}
 			}
 		}
