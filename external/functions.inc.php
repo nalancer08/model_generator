@@ -10,12 +10,16 @@
 	$site->registerStyle('reset', $site->baseUrl('/css/reset.css') );
 	$site->registerStyle('structure', $site->baseUrl('/css/structure.css') );
 	$site->registerStyle('sticky-footer', $site->baseUrl('/css/sticky-footer.css') );
-	$site->registerStyle('style', $site->baseUrl('/css/style.css'), array('bootstrap3', 'sticky-footer') );
+	$site->registerStyle('style', $site->baseUrl('/css/style.css'), array('twitter-bootstrap', 'sticky-footer') );
 	$site->enqueueStyle('style');
+
 
 	# Include scripts
 	$site->registerScript('script', $site->baseUrl('/js/script.js'), array('jquery') );
 	$site->enqueueScript('script');
+	$site->enqueueScript('backbone');
+
+	$site->dequeueScript('backbone', true);
 
 	# Include extra files
 	include $site->baseDir('/external/utilities.inc.php');

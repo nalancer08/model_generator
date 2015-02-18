@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 	$singular = $_POST["dato1"];
 	$plural = $_POST["dato2"];
@@ -6,17 +6,17 @@
 
 	$dbh = $site->getDatabase();
 	try {
-		$sql = "SELECT column_name FROM information_schema.columns WHERE table_name='{$table}'";
+		$schema = $site->getOption('db_name');
+		// $sql = "SELECT column_name FROM information_schema.columns WHERE table_name='{$table}'";
+		$sql = "DESCRIBE {$schema}.{$table}";
 		$stmt = $dbh->prepare($sql);
 		$stmt->execute();
 		$columnas = $stmt->fetchAll();
-		#print_r($columnas);
 	} catch (PDOException $e) {
 		error_log($e->getMessage());
 	}
 
-
-	$archivo = $singular . ".modelo.php";
+	$archivo = strtolower($singular) . ".model.php";
 	$singular = ucfirst($singular);
 	$plural = ucfirst($plural);
 	$lin = "";
@@ -27,7 +27,7 @@
 	$lin .= "Model {\n\n";
 
 	foreach ($columnas as $columna) {
-		$lin .= "\t\tpublic \${$columna->column_name};\n";
+		$lin .= "\t\tpublic \${$columna->Field};\n";
 	}
 
 	$lin .= "\n\t\t/**\n\t\t * Initialization callback\n";
@@ -38,7 +38,7 @@
 	$lin .= "\t\t\tif (! \$this->id ) {\n";
 	$lin .= "\t\t\t\t\$now = date('Y-m-d H:i:s');\n";
 	foreach ($columnas as $columna) {
-		$lin .= "\t\t\t\t\$this->{$columna->column_name} = '';\n";
+		$lin .= "\t\t\t\t\$this->{$columna->Field} = ".(preg_match('/(varchar|text)/', $columna->Type) === 1 ? "''" : '0').";\n";
 	}
 	$lin .= "\t\t\t}\n";
 	$lin .= "\t\t}\n";
@@ -58,31 +58,31 @@
 	#INSERT INTO
 	$lin .= "\t\t\t\t\$sql = \"INSERT INTO {$table} (";
 	foreach ($columnas as $columna) {
-		$lin .= "{$columna->column_name}, ";
+		$lin .= "{$columna->Field}, ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= ")\n";
-	
+
 
 	#VALUES
 	$lin .= "\t\t\t\t\t\tVALUES (";
 	foreach ($columnas as $columna) {
-		$lin .= ":{$columna->column_name}, ";
+		$lin .= ":{$columna->Field}, ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= ")\n";
-	
+
 	#ON
 	$lin .= "\t\t\t\t\t\tON DUPLICATE KEY UPDATE ";
 	foreach ($columnas as $columna) {
-		$lin .= "{$columna->column_name} = :{$columna->column_name}, ";
+		$lin .= "{$columna->Field} = :{$columna->Field}, ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= "\";\n";
-	
+
 	$lin .= "\t\t\t\t\$stmt = \$dbh->prepare(\$sql);\n";
 	foreach ($columnas as $columna) {
-		$lin .= "\t\t\t\t\$stmt->bindValue(':{$columna->column_name}', \$this->{$columna->column_name});\n";
+		$lin .= "\t\t\t\t\$stmt->bindValue(':{$columna->Field}', \$this->{$columna->Field});\n";
 	}
 	$lin .= "\t\t\t\t\$stmt->execute();\n";
 	$lin .= "\t\t\t\tif (! \$this->id && \$dbh->lastInsertId() ) {\n";
@@ -143,7 +143,7 @@
 	$lin .= "\t\t\ttry {\n";
 	$lin .= "\t\t\t\t\$sql = \"SELECT ";
 	foreach ($columnas as $columna) {
-		$lin .= "{$columna->column_name}, ";
+		$lin .= "{$columna->Field}, ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= " FROM {$table} WHERE id = :id\";\n";
@@ -177,18 +177,18 @@
 	$lin .= "\t\t\t\$sort = in_array(strtoupper(\$sort), array('ASC', 'DESC')) ? \$sort : 'DESC';\n";
 	$lin .= "\t\t\t\$order = in_array(strtolower(\$order), array(";
 	foreach ($columnas as $columna) {
-		$lin .= "'{$columna->column_name}', ";
+		$lin .= "'{$columna->Field}', ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= ")) ? \$order : 'id';\n";
 	$lin .= "\t\t\ttry {\n";
 	$lin .= "\t\t\t\t\$sql = \"SELECT ";
 	foreach ($columnas as $columna) {
-		$lin .= "{$columna->column_name}, ";
+		$lin .= "{$columna->Field}, ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= " FROM {$table}";
-	$lin .= "ORDER BY {\$order} {\$sort} LIMIT {\$offset},{\$limit}\";\n";
+	$lin .= " ORDER BY {\$order} {\$sort} LIMIT {\$offset},{\$limit}\";\n";
 	$lin .= "\t\t\t\t\$stmt = \$dbh->prepare(\$sql);\n";
 	$lin .= "\t\t\t\t\$stmt->execute();\n";
 	$lin .= "\t\t\t\t\$stmt->setFetchMode(PDO::FETCH_CLASS, '{$singular}');\n";
@@ -218,12 +218,12 @@
 	$lin .= "\t\t\t\$dbh = \$site->getDatabase();\n";
 	$lin .= "\t\t\t\$field = in_array(strtolower(\$field), array(";
 	foreach ($columnas as $columna) {
-		$lin .= "'{$columna->column_name}', ";
+		$lin .= "'{$columna->Field}', ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= ")) ? \$field : 'id';\n";
 	$lin .= "\t\t\t\$value = is_numeric(\$value) ? \$value : \$dbh->quote(\$value);\n";
-	$lin .= "\t\t\treturn self::rawWhere(\"{\$field} {\$operator} {\$}value}\", \$offset, \$limit, \$order, \$sort);\n" ;
+	$lin .= "\t\t\treturn self::rawWhere(\"{\$field} {\$operator} {\$value}\", \$offset, \$limit, \$order, \$sort);\n" ;
 	$lin .= "\t\t}\n\n";
 
 	$lin .= "\t\t/**\n";
@@ -233,7 +233,7 @@
 	$lin .= "\t\t * @param  integer \$limit      How much items to retrieve\n";
 	$lin .= "\t\t * @param  string  \$order      Column for ordering\n";
 	$lin .= "\t\t * @param  string  \$sort       Sort order (ASC, DESC)\n";
-	$lin .= "\t\t * @return mixed               Array with fetched objects or False on error)\n";	 
+	$lin .= "\t\t * @return mixed               Array with fetched objects or False on error)\n";
 	$lin .= "\t\t */\n";
 
 	#static function rawWhere
@@ -246,14 +246,14 @@
 	$lin .= "\t\t\t\$sort = in_array(strtoupper(\$sort), array('ASC', 'DESC')) ? \$sort : 'DESC';\n";
 	$lin .= "\t\t\t\$order = in_array(strtolower(\$order), array(";
 	foreach ($columnas as $columna) {
-		$lin .= "'{$columna->column_name}', ";
+		$lin .= "'{$columna->Field}', ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= ")) ? \$order : 'id';\n";
 	$lin .= "\t\t\ttry {\n";
 	$lin .= "\t\t\t\t\$sql = \"SELECT ";
 	foreach ($columnas as $columna) {
-		$lin .= "{$columna->column_name}, ";
+		$lin .= "{$columna->Field}, ";
 	}
 	$lin = rtrim($lin, ", ");
 	$lin .= " FROM {$table} WHERE {\$conditions} ORDER BY {\$order} {\$sort} LIMIT {\$offset},{\$limit}\";\n";
@@ -281,7 +281,8 @@
 	$lin .= "\t\t\ttry {\n";
 	$lin .= "\t\t\t\t\$sql = \"SELECT COUNT(id) AS total FROM {$table} WHERE {\$conditions}\";\n";
 	$lin .= "\t\t\t\t\$stmt = \$dbh->prepare(\$sql);\n";
-	$lin .= "\t\t\t\t\$stmt->fetch();\n";
+	$lin .= "\t\t\t\t\$stmt->execute();\n";
+	$lin .= "\t\t\t\t\$row = \$stmt->fetch();\n";
 	$lin .= "\t\t\t\tif (\$row) {\n";
 	$lin .= "\t\t\t\t\t\$ret = \$row->total;\n";
 	$lin .= "\t\t\t\t}\n";
@@ -292,14 +293,21 @@
 	$lin .= "\t\t}\n";
 	$lin .= "\t}\n";
 
-	$lin .= "?>" ; 
+	$lin .= "?>" ;
 
 	$fp = fopen($site->baseDir("/output/{$archivo}"), "w");
 	$write = fputs($fp, $lin);
 	fclose($fp);
 
-	echo "Se genero un archivo llamado {$archivo} en la carpeta output :D";
-
-
 ?>
+<?php $site->getParts(array( 'sticky-footer/header_html', 'sticky-footer/header')) ?>
 
+	<div class="container">
+		<div class="margins">
+			<div class="alert alert-success">Se generó un archivo llamado <strong><?php echo $archivo; ?></strong> en la carpeta 'output' :D &mdash; <a href="<?php $site->urlTo('/', true); ?>" class="alert-link">Volver a empezar</a></div>
+			<p>A continuación se muestra el código generado:</p>
+			<pre><?php echo htmlspecialchars($lin); ?></pre>
+		</div>
+	</div>
+
+<?php $site->getParts(array( 'sticky-footer/footer', 'sticky-footer/footer_html')) ?>
