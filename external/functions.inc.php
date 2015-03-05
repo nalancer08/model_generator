@@ -19,8 +19,6 @@
 	$site->enqueueScript('script');
 	$site->enqueueScript('backbone');
 
-	$site->dequeueScript('backbone', true);
-
 	# Include extra files
 	include $site->baseDir('/external/utilities.inc.php');
 	include $site->baseDir('/external/ajax.inc.php');
@@ -39,6 +37,8 @@
 	# Pages
 	$site->addPage('entrada', 'entrada-page');
 	$site->addPage('generador','generador-page');
+	$site->addPage('mongo_generador','mongo_generador-page');
+	$site->addPage('entrada_mongo','mongo-page');
 
 	# Localization
 	if ( isset($i18n) ) {
