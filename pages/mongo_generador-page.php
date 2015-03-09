@@ -165,7 +165,7 @@
 	$lin .= "\t\t\tif(\$type == '_id')\n";
 	$lin .= "\t\t\t\treturn self::_getBySlug(\$id);\n\n";
 	$lin .= "\t\t\t\telse if(\$type == 'slug')\n";
-	$lin .= "\t\t\t\t\treturn self::_getBySlug(\$id);\n";
+	$lin .= "\t\t\t\t\treturn self::_Slug(\$id);\n";
 	$lin .= "\t\t}\n\n";
 
 	$lin .= "\t\tstatic function count(\$conditions = array()) {\n";
@@ -634,11 +634,21 @@
 	$lin .= "?>";
 
 
-
-
-		$fp = fopen($site->baseDir("/output/{$archivo}"), "w");
+	$fp = fopen($site->baseDir("/output/{$archivo}"), "w");
 	$write = fputs($fp, $lin);
 	fclose($fp);
 
+	?>
 
- ?>
+	<?php $site->getParts(array( 'sticky-footer/header_html', 'sticky-footer/header')) ?>
+
+	<div class="container">
+		<div class="margins">
+			<div class="alert alert-success">Se generó un archivo llamado <strong><?php echo $archivo; ?></strong> en la carpeta 'output' :D &mdash; <a href="<?php $site->urlTo('/', true); ?>" class="alert-link">Volver a empezar</a></div>
+			<p>A continuación se muestra el código generado:</p>
+			<pre><?php echo htmlspecialchars($lin); ?></pre>
+		</div>
+	</div>
+
+	<?php $site->getParts(array( 'sticky-footer/footer', 'sticky-footer/footer_html')) ?>
+
